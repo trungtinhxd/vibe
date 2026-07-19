@@ -26,8 +26,8 @@ const readConfig = () => {
     }
   }
   return {
-    avatar: "/avatar.jpg",
-    banner: "/banner.jpg",
+    avatar: "https://cdn.discordapp.com/avatars/1383398182351929384/30175d67bf480f2f49bc07ccd85bf76a.png?size=256",
+    banner: "https://cdn.discordapp.com/banners/1383398182351929384/a_f0a4fc1f5cb01acd16748c16c062fb28.gif?size=600",
     bg: "/bg.mp4",
   };
 };

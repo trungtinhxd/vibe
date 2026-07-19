@@ -211,6 +211,7 @@ interface DiscordProfile {
 }
 
 const getAvatarUrl = (user: DiscordUser) => {
+  if (!user) return "https://cdn.discordapp.com/avatars/1383398182351929384/30175d67bf480f2f49bc07ccd85bf76a.png?size=256";
   if (!user.avatar) {
     return `https://cdn.discordapp.com/embed/avatars/${Number(user.discriminator || "0") % 5}.png`;
   }
@@ -220,6 +221,8 @@ const getAvatarUrl = (user: DiscordUser) => {
 
 const getBannerStyle = (user: DiscordUser) => {
   const fallbackGrad = 'linear-gradient(135deg, #09090b, #18181b)';
+  if (!user) return { backgroundImage: fallbackGrad };
+  
   const fallbackColor = user.banner_color || (user.accent_color ? `#${user.accent_color.toString(16).padStart(6, '0')}` : '#1e3a8a');
 
   if (user.banner) {
@@ -245,7 +248,7 @@ const getBannerStyle = (user: DiscordUser) => {
 };
 
 const getAvatarDecorationUrl = (user: DiscordUser) => {
-  if (user.avatar_decoration_data) {
+  if (user && user.avatar_decoration_data && typeof user.avatar_decoration_data.asset === 'string') {
     const asset = user.avatar_decoration_data.asset;
     if (asset.startsWith("http")) {
       return asset;
@@ -287,23 +290,153 @@ export default function App() {
   const [bgMedia, setBgMedia] = useState<string>("/bg.mp4");
   const [isBgVideo, setIsBgVideo] = useState<boolean>(true);
 
-  const [discordData, setDiscordData] = useState<DiscordProfile | null>(null);
+  const [discordData, setDiscordData] = useState<DiscordProfile>({
+    discord_user: {
+      id: "1383398182351929384",
+      username: "trungtinhxd",
+      discriminator: "0",
+      avatar: "30175d67bf480f2f49bc07ccd85bf76a",
+      avatar_decoration_data: {
+        asset: "a_d3da36040163ee0f9176dfe7ced45cdc",
+        sku_id: "1144058522808614923"
+      },
+      banner: "a_f0a4fc1f5cb01acd16748c16c062fb28",
+      banner_color: "#000000",
+      accent_color: null,
+      global_name: "TrungTinh",
+      public_flags: 0,
+      display_name_styles: {
+        font_id: 6,
+        effect_id: 4,
+        colors: [4144959]
+      }
+    },
+    discord_status: "offline",
+    activities: [
+      {
+        id: "custom",
+        name: "Custom Status",
+        type: 4,
+        state: "What you hold in your hands isn't always yours.",
+        emoji: { name: "✨" }
+      }
+    ],
+    listening_to_spotify: false,
+    spotify: null,
+    isFallback: true
+  });
   const [spotifyProgress, setSpotifyProgress] = useState(0);
   const [spotifyTimeStr, setSpotifyTimeStr] = useState({ current: "0:00", total: "0:00" });
 
   const bgInputRef = useRef<HTMLInputElement>(null);
 
-  // Poll Discord data
+  // Poll Discord data with dual fallback (Express API first, Lanyard API second)
   useEffect(() => {
-    const fetchDiscord = () => {
-      fetch("/api/discord")
-        .then((res) => res.json())
-        .then((data) => {
-          if (data && data.discord_user) {
-            setDiscordData(data);
+    const fetchDiscord = async () => {
+      const discordId = "1383398182351929384";
+      try {
+        const res = await fetch("/api/discord");
+        if (res.ok) {
+          const contentType = res.headers.get("content-type");
+          if (contentType && contentType.includes("application/json")) {
+            const data = await res.json();
+            if (data && data.discord_user) {
+              setDiscordData({ ...data, isFallback: false });
+              return;
+            }
           }
-        })
-        .catch((err) => console.error("Error fetching Discord data", err));
+        }
+        throw new Error("Local API not available or returned non-JSON");
+      } catch (err) {
+        // Fallback: Fetch directly from Lanyard + Japi client-side to mirror backend high-fidelity data
+        let lanyardData: any = null;
+        let japiProfile: any = null;
+
+        // Fetch Lanyard Presence directly
+        try {
+          const lanyardRes = await fetch(`https://api.lanyard.rest/v1/users/${discordId}`);
+          if (lanyardRes.ok) {
+            const result = await lanyardRes.json();
+            if (result.success && result.data) {
+              lanyardData = result.data;
+            }
+          }
+        } catch (lanyardErr) {
+          console.error("Direct Lanyard fetch failed", lanyardErr);
+        }
+
+        // Fetch High-Fidelity Japi Profile directly
+        try {
+          const japiRes = await fetch(`https://japi.rest/discord/v1/user/${discordId}`);
+          if (japiRes.ok) {
+            const result = await japiRes.json();
+            if (result && result.data) {
+              japiProfile = result.data;
+            }
+          }
+        } catch (japiErr) {
+          console.error("Direct Japi fetch failed", japiErr);
+        }
+
+        const highFidelityProfile = {
+          id: discordId,
+          username: "trungtinhxd",
+          discriminator: "0",
+          avatar: "30175d67bf480f2f49bc07ccd85bf76a",
+          avatar_decoration_data: {
+            asset: "a_d3da36040163ee0f9176dfe7ced45cdc",
+            sku_id: "1144058522808614923"
+          },
+          banner: "a_f0a4fc1f5cb01acd16748c16c062fb28",
+          banner_color: "#000000",
+          accent_color: null,
+          global_name: "TrungTinh",
+          public_flags: 0,
+          display_name_styles: {
+            font_id: 6,
+            effect_id: 4,
+            colors: [4144959]
+          }
+        };
+
+        const baseProfile = japiProfile || (lanyardData ? lanyardData.discord_user : null) || highFidelityProfile;
+
+        const mergedUser = {
+          id: baseProfile.id || discordId,
+          username: baseProfile.username || highFidelityProfile.username,
+          discriminator: baseProfile.discriminator || "0",
+          avatar: baseProfile.avatar || highFidelityProfile.avatar,
+          avatar_decoration_data: baseProfile.avatar_decoration_data || (baseProfile.avatar_decoration ? { asset: baseProfile.avatar_decoration } : highFidelityProfile.avatar_decoration_data),
+          banner: baseProfile.banner || highFidelityProfile.banner,
+          banner_color: baseProfile.banner_color || highFidelityProfile.banner_color,
+          accent_color: baseProfile.accent_color !== undefined ? baseProfile.accent_color : null,
+          global_name: baseProfile.global_name || highFidelityProfile.global_name,
+          public_flags: baseProfile.public_flags !== undefined ? baseProfile.public_flags : highFidelityProfile.public_flags,
+          display_name_styles: baseProfile.display_name_styles || highFidelityProfile.display_name_styles || null
+        };
+
+        const status = lanyardData ? lanyardData.discord_status : "offline";
+        const activities = lanyardData ? lanyardData.activities : [
+          {
+            id: "custom",
+            name: "Custom Status",
+            type: 4,
+            state: "What you hold in your hands isn't always yours.",
+            emoji: { name: "✨" }
+          }
+        ];
+        const listeningToSpotify = lanyardData ? lanyardData.listening_to_spotify : false;
+        const spotify = lanyardData ? lanyardData.spotify : null;
+
+        setDiscordData({
+          discord_user: mergedUser,
+          discord_status: status,
+          activities: activities,
+          listening_to_spotify: listeningToSpotify,
+          spotify: spotify,
+          isFallback: !lanyardData
+        });
+      }
     };
 
     fetchDiscord();
@@ -342,53 +475,82 @@ export default function App() {
     return () => clearInterval(interval);
   }, [discordData?.spotify]);
 
-  // Fetch persistent config on load
+  // Fetch persistent config with fallback
   useEffect(() => {
     fetch("/api/config")
-      .then((res) => res.json())
+      .then((res) => {
+        if (!res.ok) throw new Error("Not 200 OK");
+        const contentType = res.headers.get("content-type");
+        if (contentType && contentType.includes("application/json")) {
+          return res.json();
+        }
+        throw new Error("Not JSON response");
+      })
       .then((data) => {
-        if (data.bg) {
+        if (data && data.bg) {
           setBgMedia(data.bg);
           setIsBgVideo(data.bg.toLowerCase().endsWith('.mp4') || data.bg.toLowerCase().endsWith('.webm'));
         }
       })
-      .catch((err) => console.error("Could not load background configuration", err));
+      .catch((err) => {
+        console.warn("Could not load background configuration from backend API, checking localStorage", err);
+        const savedBg = localStorage.getItem("portfolio_bg");
+        if (savedBg) {
+          setBgMedia(savedBg);
+          setIsBgVideo(savedBg.toLowerCase().endsWith('.mp4') || savedBg.toLowerCase().endsWith('.webm') || savedBg.startsWith('data:video/'));
+        } else {
+          setBgMedia("/bg.mp4");
+          setIsBgVideo(true);
+        }
+      });
   }, []);
 
   const handleFileChange = async (e: React.ChangeEvent<HTMLInputElement>, type: 'avatar' | 'banner' | 'bg') => {
     const file = e.target.files?.[0];
     if (file) {
+      const isVideo = file.type.startsWith("video/");
+      
+      // Optimistic UI: Set local URL instantly
+      const localUrl = URL.createObjectURL(file);
+      if (type === 'bg') {
+        setBgMedia(localUrl);
+        setIsBgVideo(isVideo);
+      }
+
+      // Base64 storage fallback for static pages
+      const reader = new FileReader();
+      reader.onload = (event) => {
+        const dataUrl = event.target?.result as string;
+        if (type === 'bg') {
+          try {
+            localStorage.setItem("portfolio_bg", dataUrl);
+          } catch (error) {
+            console.warn("Could not save to localStorage (file size exceeds quota), active session only.");
+          }
+        }
+      };
+      reader.readAsDataURL(file);
+
       const formData = new FormData();
       formData.append("file", file);
       formData.append("type", type);
 
       try {
-        const isVideo = file.type.startsWith("video/");
-        if (type === 'bg') {
-          setIsBgVideo(isVideo);
-        }
-
-        // Optimistic UI: Set local URL instantly
-        const localUrl = URL.createObjectURL(file);
-        if (type === 'bg') {
-          setBgMedia(localUrl);
-        }
-
         const response = await fetch("/api/upload", {
           method: "POST",
           body: formData,
         });
-        const data = await response.json();
-        if (data.success) {
-          if (type === 'bg') {
-            setBgMedia(data.url);
-            setIsBgVideo(data.url.toLowerCase().endsWith('.mp4') || data.url.toLowerCase().endsWith('.webm'));
+        if (response.ok) {
+          const data = await response.json();
+          if (data && data.success && data.url) {
+            if (type === 'bg') {
+              setBgMedia(data.url);
+              setIsBgVideo(data.url.toLowerCase().endsWith('.mp4') || data.url.toLowerCase().endsWith('.webm'));
+            }
           }
-        } else {
-          console.error("Upload failed server side", data.error);
         }
       } catch (err) {
-        console.error("Network upload error", err);
+        console.warn("Backend upload failed, utilizing static client fallback", err);
       }
     }
   };
@@ -592,7 +754,7 @@ export default function App() {
             <div className="absolute -top-12 left-6 w-24 h-24 z-20 group/avatar">
               {/* Avatar Image (Supports gif, jpg, png) */}
               <img 
-                src={discordData ? getAvatarUrl(discordData.discord_user) : "/avatar.jpg"} 
+                src={discordData?.discord_user ? getAvatarUrl(discordData.discord_user) : "https://cdn.discordapp.com/avatars/1383398182351929384/30175d67bf480f2f49bc07ccd85bf76a.png?size=256"} 
                 alt="Avatar" 
                 className="w-full h-full object-cover rounded-full border-[6px] border-zinc-950/60 shadow-2xl backdrop-blur-md transition-all duration-300"
                 referrerPolicy="no-referrer"
@@ -635,11 +797,11 @@ export default function App() {
                     className="text-2xl md:text-3xl font-bold tracking-wide relative z-10"
                     style={discordData ? getDisplayNameStyle(discordData.discord_user) : { color: '#ffffff' }}
                   >
-                    {discordData?.discord_user.global_name || "TrungTinh"}
+                    {discordData?.discord_user?.global_name || "TrungTinh"}
                   </h1>
                 </div>
                 <p className="text-zinc-400 text-xs font-mono font-semibold mt-0.5">
-                  @{discordData?.discord_user.username || "ngtrtinh28"}
+                  @{discordData?.discord_user?.username || "ngtrtinh28"}
                 </p>
 
                 {/* Custom Status */}
