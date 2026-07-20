@@ -64,7 +64,7 @@ app.get("/api/config", (req, res) => {
 
 let cachedDiscordData: any = null;
 let lastFetchedTime = 0;
-const CACHE_TTL = 15000; // 15 seconds
+const CACHE_TTL = 3000; // 3 seconds
 
 async function fetchWithTimeout(url: string, options = {}, timeout = 4000) {
   const controller = new AbortController();

@@ -31,8 +31,13 @@ interface DiscordUser {
 const getDisplayNameStyle = (user?: DiscordUser) => {
   // Determine font family based on font_id
   let fontFamily = '"Outfit", "Inter", sans-serif';
+  let textShadow = 'none';
+  let animation = 'none';
+
   if (user && user.display_name_styles) {
-    const fontId = user.display_name_styles.font_id;
+    const { font_id: fontId, effect_id: effectId } = user.display_name_styles;
+    
+    // Map font_id to font family
     if (fontId === 6) {
       fontFamily = '"DynaPuff", cursive';
     } else if (fontId === 1) {
@@ -40,19 +45,29 @@ const getDisplayNameStyle = (user?: DiscordUser) => {
     } else if (fontId === 2) {
       fontFamily = '"JetBrains Mono", monospace';
     } else if (fontId === 3) {
-      fontFamily = '"Playfair Display", serif';
+      fontFamily = '"Cherry Swash", cursive';
     } else if (fontId === 4) {
       fontFamily = '"Orbitron", sans-serif';
     } else if (fontId === 5) {
       fontFamily = '"Caveat", cursive';
     }
+
+    // Handle effect_id for animation
+    if (effectId === 4) {
+      animation = 'pulse 2s infinite ease-in-out';
+    }
   }
+
+  const baseStyle: any = {
+    fontFamily: fontFamily,
+    animation: animation,
+  };
 
   if (!user || !user.display_name_styles || !user.display_name_styles.colors || user.display_name_styles.colors.length === 0) {
     return {
+      ...baseStyle,
       color: '#ffffff',
       textShadow: '0 0 10px rgba(255,255,255,0.3)',
-      fontFamily: fontFamily
     };
   }
 
@@ -62,20 +77,20 @@ const getDisplayNameStyle = (user?: DiscordUser) => {
 
   if (hexColors.length === 1) {
     return {
+      ...baseStyle,
       color: hexColors[0],
       textShadow: `0 0 12px ${hexColors[0]}80`,
-      fontFamily: fontFamily
     };
   }
 
   // Linear gradient for multiple colors
   return {
+    ...baseStyle,
     backgroundImage: `linear-gradient(to right, ${hexColors.join(', ')})`,
     WebkitBackgroundClip: 'text',
     WebkitTextFillColor: 'transparent',
     textShadow: 'none',
     display: 'inline-block',
-    fontFamily: fontFamily
   };
 };
 
@@ -509,12 +524,13 @@ export default function App() {
     const file = e.target.files?.[0];
     if (file) {
       const isVideo = file.type.startsWith("video/");
+      const isGif = file.type === "image/gif";
       
       // Optimistic UI: Set local URL instantly
       const localUrl = URL.createObjectURL(file);
       if (type === 'bg') {
         setBgMedia(localUrl);
-        setIsBgVideo(isVideo);
+        setIsBgVideo(isVideo); // GIF is not a video, so isVideo=false, correct.
       }
 
       // Base64 storage fallback for static pages
@@ -644,6 +660,10 @@ export default function App() {
         .card-glow {
           animation: border-glow 4s infinite;
         }
+        @keyframes pulse {
+          0%, 100% { transform: scale(1); opacity: 1; }
+          50% { transform: scale(1.05); opacity: 0.8; }
+        }
         @keyframes rotate-border {
           0% { transform: rotate(0deg); }
           100% { transform: rotate(360deg); }
@@ -651,36 +671,13 @@ export default function App() {
         .animate-rotate-border {
           animation: rotate-border 6s linear infinite;
         }
+        @keyframes scan {
+          0% { transform: translateY(-100%); }
+          100% { transform: translateY(100%); }
+        }
       `}</style>
 
-      {/* Click to Enter Overlay */}
-      <AnimatePresence>
-        {!hasEntered && (
-          <motion.div 
-            initial={{ opacity: 1 }}
-            exit={{ opacity: 0 }}
-            transition={{ duration: 0.8 }}
-            className="fixed inset-0 z-50 flex items-center justify-center bg-black/[0.15] backdrop-blur-3xl cursor-pointer"
-            onClick={(e) => {
-              e.stopPropagation();
-              setHasEntered(true);
-            }}
-          >
-            <motion.div 
-              animate={{ 
-                scale: [1, 1.15, 1], 
-                opacity: [0.7, 1, 0.7],
-                filter: ["drop-shadow(0 0 10px rgba(255,255,255,0.1))", "drop-shadow(0 0 25px rgba(255,255,255,0.35))", "drop-shadow(0 0 10px rgba(255,255,255,0.1))"]
-              }}
-              transition={{ repeat: Infinity, duration: 2.2, ease: "easeInOut" }}
-              whileHover={{ scale: 1.25 }}
-              className="text-8xl select-none"
-            >
-              🖤
-            </motion.div>
-          </motion.div>
-        )}
-      </AnimatePresence>
+
       
       {/* Background Media (Dark Anime/Fantasy Vibe) */}
       <div className="fixed inset-0 z-0 opacity-40 transition-all duration-700">
@@ -712,18 +709,21 @@ export default function App() {
       {/* Main Content Container */}
       <motion.div 
         ref={homeRef} 
-        initial={{ opacity: 0, y: 20 }}
-        animate={hasEntered ? { opacity: 1, y: 0 } : { opacity: 0, y: 20 }}
-        transition={{ duration: 1, ease: "easeOut" }}
+        initial={{ opacity: 0, y: 15 }}
+        animate={{ opacity: 1, y: 0 }}
+        transition={{ duration: 1.2, ease: "easeOut" }}
         className="relative z-10 flex flex-col items-center min-h-screen justify-center pt-24 pb-12"
       >
         
         {/* Profile Card (Liquid Glass with Animated Flowing Border) */}
         <motion.div 
-          initial={{ opacity: 0, scale: 0.95 }}
-          animate={hasEntered ? { opacity: 1, scale: 1 } : { opacity: 0, scale: 0.95 }}
-          transition={{ duration: 0.8, delay: 0.2 }}
-          className="relative w-full max-w-sm rounded-2xl mb-10 shadow-[0_0_50px_rgba(0,0,0,0.6)] mt-4 group/card text-left"
+          initial={{ opacity: 0, scale: 0.92 }}
+          animate={{ opacity: 1, scale: 1 }}
+          transition={{ duration: 1, delay: 0.2, ease: "easeOut" }}
+          className="relative w-full max-w-sm rounded-2xl mb-10 shadow-[0_0_50px_rgba(0,0,0,0.6)] mt-4 group/card text-left cursor-pointer"
+          onClick={() => {
+            if (!hasEntered) setHasEntered(true);
+          }}
         >
           {/* Animated spinning white glowing border beam (Strictly on the border via Masking) */}
           <div 
@@ -736,11 +736,39 @@ export default function App() {
               padding: "2.5px"
             }}
           >
-            <div className="absolute inset-[-150%] animate-rotate-border bg-[conic-gradient(from_0deg,transparent_35%,#ffffff_50%,transparent_65%)]" />
+            <div className="absolute inset-[-150%] animate-rotate-border bg-[conic-gradient(from_0deg,transparent_0%,#ffffff_80%,transparent_100%)]" />
           </div>
           
           {/* Inner Liquid Glass Card */}
-          <div className="w-full bg-white/[0.03] backdrop-blur-3xl rounded-2xl overflow-hidden relative z-10 border border-white/10 shadow-[inset_0_1.5px_1px_rgba(255,255,255,0.15)]">
+          <div className="w-full bg-black/40 backdrop-blur-xl rounded-2xl overflow-hidden relative z-10 border border-white/10 shadow-[inset_0_1.5px_1px_rgba(255,255,255,0.1)]">
+            
+            {/* Liquid Glass Frosted Lock Overlay */}
+            <AnimatePresence>
+              {!hasEntered && (
+                <motion.div
+                  initial={{ opacity: 1 }}
+                  exit={{ opacity: 0, scale: 1.05, filter: "blur(12px)" }}
+                  transition={{ duration: 0.7, ease: "easeInOut" }}
+                  className="absolute inset-0 z-30 flex flex-col items-center justify-center bg-black/65 backdrop-blur-[24px] rounded-2xl p-6 text-center select-none"
+                >
+                  <motion.div
+                    animate={{ 
+                      scale: [1, 1.15, 1],
+                      filter: [
+                        "drop-shadow(0 0 8px rgba(255,255,255,0.05))", 
+                        "drop-shadow(0 0 20px rgba(255,255,255,0.15))", 
+                        "drop-shadow(0 0 8px rgba(255,255,255,0.05))"
+                      ]
+                    }}
+                    transition={{ repeat: Infinity, duration: 1.8, ease: "easeInOut" }}
+                    className="text-7xl cursor-pointer select-none"
+                  >
+                    🖤
+                  </motion.div>
+                </motion.div>
+              )}
+            </AnimatePresence>
+
           {/* Banner Area */}
           <div 
             className="h-32 w-full relative overflow-hidden"
@@ -840,24 +868,6 @@ export default function App() {
               <div className="mt-6 pt-6 border-t border-white/5">
                 <TypewriterBio hasEntered={hasEntered} discordUser={discordData?.discord_user} />
               </div>
-
-              {/* Lanyard Help Notice */}
-              {discordData?.isFallback && (
-                <div className="mt-4 p-3 rounded-xl bg-blue-500/10 border border-blue-500/20 text-xs text-blue-200 leading-relaxed font-sans">
-                  <div className="font-semibold mb-1 flex items-center gap-1 text-blue-300">
-                    <span>💡</span> Kết nối Discord Live Presence
-                  </div>
-                  Tài khoản của bạn đang dùng dữ liệu dự phòng. Để hiển thị trạng thái Trực tuyến, Spotify và Game trực tiếp theo thời gian thực, vui lòng tham gia server Lanyard:{" "}
-                  <a 
-                    href="https://discord.gg/lanyard" 
-                    target="_blank" 
-                    rel="noopener noreferrer" 
-                    className="text-blue-400 underline font-semibold hover:text-blue-300"
-                  >
-                    discord.gg/lanyard
-                  </a>
-                </div>
-              )}
 
               {/* LIVE DISCORD PRESENCE SECTION */}
               {(discordData?.spotify || discordData?.activities.some(act => act.type !== 4 && act.id !== "spotify" && act.name !== "Spotify")) && (
@@ -969,7 +979,12 @@ export default function App() {
       </motion.div>
 
         {/* Social Buttons */}
-        <div className="flex items-center gap-4 md:gap-6 flex-wrap justify-center">
+        <motion.div 
+          initial={{ opacity: 0, y: 15 }}
+          animate={hasEntered ? { opacity: 1, y: 0 } : { opacity: 0, y: 15 }}
+          transition={{ duration: 0.8, delay: 0.4 }}
+          className="flex items-center gap-4 md:gap-6 flex-wrap justify-center mt-4"
+        >
           {/* Discord Button */}
           <a 
             href="https://discord.com/users/1383398182351929384" 
@@ -1025,7 +1040,7 @@ export default function App() {
           >
             <Github size={32} className="text-white" />
           </a>
-        </div>
+        </motion.div>
 
       </motion.div>
       
